@@ -1,0 +1,41 @@
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: frontend-config
+  namespace: lawhelp
+data:
+  api_url: "https://api.lawhelp.cm"
+  ai_model_endpoint: "http://ai-model-service:5000/predict"
+  environment: "production"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: api-gateway-config
+  namespace: lawhelp
+data:
+  auth_service_url: "http://auth-service:3001"
+  user_service_url: "http://user-service:3002"
+  lawyer_service_url: "http://lawyer-service:3003"
+  chat_service_url: "http://chat-service:3004"
+  rating_service_url: "http://rating-service:3005"
+  ai_model_url: "http://ai-model-service:5000"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+  namespace: monitoring
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 15s
+    scrape_configs:
+      - job_name: 'kubernetes-pods'
+        kubernetes_sd_configs:
+          - role: pod
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+            action: keep
+            regex: true

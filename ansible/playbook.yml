@@ -1,0 +1,219 @@
+
+---
+- name: LawHelp Infrastructure Setup
+  hosts: all
+  become: yes
+  vars:
+    docker_compose_version: "2.23.0"
+    node_version: "18"
+    
+  tasks:
+    - name: Update package cache
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+
+    - name: Install required packages
+      apt:
+        name:
+          - curl
+          - wget
+          - gnupg
+          - lsb-release
+          - ca-certificates
+          - apt-transport-https
+          - software-properties-common
+          - git
+          - nginx
+          - redis-server
+          - postgresql
+          - postgresql-contrib
+        state: present
+
+    - name: Add Docker's official GPG key
+      apt_key:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        state: present
+
+    - name: Add Docker repository
+      apt_repository:
+        repo: "deb https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
+        state: present
+
+    - name: Install Docker
+      apt:
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+        state: present
+
+    - name: Start and enable Docker service
+      systemd:
+        name: docker
+        state: started
+        enabled: yes
+
+    - name: Add user to docker group
+      user:
+        name: "{{ ansible_user }}"
+        groups: docker
+        append: yes
+
+    - name: Install Docker Compose
+      get_url:
+        url: "https://github.com/docker/compose/releases/download/v{{ docker_compose_version }}/docker-compose-linux-x86_64"
+        dest: /usr/local/bin/docker-compose
+        mode: '0755'
+
+    - name: Install Node.js
+      shell: |
+        curl -fsSL https://deb.nodesource.com/setup_{{ node_version }}.x | sudo -E bash -
+        apt-get install -y nodejs
+
+    - name: Install kubectl
+      shell: |
+        curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+        install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
+
+    - name: Install Helm
+      shell: |
+        curl https://baltocdn.com/helm/signing.asc | gpg --dearmor | sudo tee /usr/share/keyrings/helm.gpg > /dev/null
+        echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/helm.gpg] https://baltocdn.com/helm/stable/debian/ all main" | sudo tee /etc/apt/sources.list.d/helm-stable-debian.list
+        apt-get update
+        apt-get install helm
+
+    - name: Configure firewall
+      ufw:
+        rule: allow
+        port: "{{ item }}"
+        proto: tcp
+      loop:
+        - "22"    # SSH
+        - "80"    # HTTP
+        - "443"   # HTTPS
+        - "3000"  # API Gateway
+        - "9090"  # Prometheus
+        - "3000"  # Grafana
+
+    - name: Enable firewall
+      ufw:
+        state: enabled
+
+    - name: Configure PostgreSQL
+      postgresql_db:
+        name: lawhelp
+        state: present
+      become_user: postgres
+
+    - name: Create PostgreSQL user
+      postgresql_user:
+        name: lawhelp_user
+        password: "{{ db_password }}"
+        priv: "lawhelp:ALL"
+        state: present
+      become_user: postgres
+
+    - name: Configure Redis
+      lineinfile:
+        path: /etc/redis/redis.conf
+        regexp: '^bind 127.0.0.1'
+        line: 'bind 0.0.0.0'
+      notify: restart redis
+
+    - name: Start and enable services
+      systemd:
+        name: "{{ item }}"
+        state: started
+        enabled: yes
+      loop:
+        - nginx
+        - redis-server
+        - postgresql
+
+  handlers:
+    - name: restart redis
+      systemd:
+        name: redis-server
+        state: restarted
+
+- name: Deploy Monitoring Stack
+  hosts: monitoring
+  become: yes
+  tasks:
+    - name: Create monitoring directory
+      file:
+        path: /opt/monitoring
+        state: directory
+        mode: '0755'
+
+    - name: Copy Prometheus configuration
+      copy:
+        src: prometheus.yml
+        dest: /opt/monitoring/prometheus.yml
+
+    - name: Copy alert rules
+      copy:
+        src: alert.rules.yml
+        dest: /opt/monitoring/alert.rules.yml
+
+    - name: Deploy monitoring stack
+      docker_compose:
+        project_src: /opt/monitoring
+        definition:
+          version: '3.8'
+          services:
+            prometheus:
+              image: prom/prometheus:latest
+              ports:
+                - "9090:9090"
+              volumes:
+                - ./prometheus.yml:/etc/prometheus/prometheus.yml
+                - ./alert.rules.yml:/etc/prometheus/alert.rules.yml
+              command:
+                - '--config.file=/etc/prometheus/prometheus.yml'
+                - '--storage.tsdb.path=/prometheus'
+                - '--web.console.libraries=/etc/prometheus/console_libraries'
+                - '--web.console.templates=/etc/prometheus/consoles'
+                - '--web.enable-lifecycle'
+
+            grafana:
+              image: grafana/grafana:latest
+              ports:
+                - "3000:3000"
+              environment:
+                - GF_SECURITY_ADMIN_PASSWORD=admin123
+              volumes:
+                - grafana-storage:/var/lib/grafana
+
+            alertmanager:
+              image: prom/alertmanager:latest
+              ports:
+                - "9093:9093"
+
+          volumes:
+            grafana-storage:
+
+- name: Deploy Application Services
+  hosts: app_servers
+  become: yes
+  tasks:
+    - name: Clone application repository
+      git:
+        repo: https://github.com/your-org/lawhelp.git
+        dest: /opt/lawhelp
+        version: main
+
+    - name: Install application dependencies
+      npm:
+        path: /opt/lawhelp
+
+    - name: Build application
+      command: npm run build
+      args:
+        chdir: /opt/lawhelp
+
+    - name: Deploy application with Docker Compose
+      docker_compose:
+        project_src: /opt/lawhelp
+        state: present

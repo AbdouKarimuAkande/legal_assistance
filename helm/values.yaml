@@ -1,0 +1,145 @@
+
+# Default values for lawhelp.
+replicaCount: 1
+
+image:
+  repository: lawhelp
+  pullPolicy: IfNotPresent
+  tag: "latest"
+
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/path: "/metrics"
+  prometheus.io/port: "3000"
+
+podSecurityContext:
+  fsGroup: 2000
+
+securityContext:
+  capabilities:
+    drop:
+    - ALL
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  runAsUser: 1000
+
+service:
+  type: ClusterIP
+  port: 80
+
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+  hosts:
+    - host: lawhelp.cm
+      paths:
+        - path: /
+          pathType: Prefix
+    - host: api.lawhelp.cm
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: lawhelp-tls
+      hosts:
+        - lawhelp.cm
+        - api.lawhelp.cm
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 250m
+    memory: 256Mi
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 80
+  targetMemoryUtilizationPercentage: 80
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
+
+# Environment specific configurations
+environment: production
+
+# Database configuration
+database:
+  host: supabase-db
+  port: 5432
+  name: lawhelp
+  ssl: true
+
+# Redis configuration
+redis:
+  enabled: true
+  host: redis-master
+  port: 6379
+
+# Monitoring
+monitoring:
+  enabled: true
+  serviceMonitor:
+    enabled: true
+    interval: 30s
+    path: /metrics
+
+# Security
+networkPolicy:
+  enabled: true
+  ingress:
+    - from:
+      - namespaceSelector:
+          matchLabels:
+            name: lawhelp
+      ports:
+      - protocol: TCP
+        port: 3000
+
+# AI Model configuration
+aiModel:
+  enabled: true
+  image: lawhelp/ai-model:latest
+  resources:
+    limits:
+      cpu: 2
+      memory: 4Gi
+      nvidia.com/gpu: 1
+    requests:
+      cpu: 1
+      memory: 2Gi
+
+# Microservices configuration
+microservices:
+  authService:
+    enabled: true
+    replicaCount: 2
+    image: lawhelp/auth-service:latest
+    
+  chatService:
+    enabled: true
+    replicaCount: 3
+    image: lawhelp/chat-service:latest
+    
+  userService:
+    enabled: true
+    replicaCount: 2
+    image: lawhelp/user-service:latest
