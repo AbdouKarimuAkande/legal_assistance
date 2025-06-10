@@ -21,21 +21,41 @@ function AppContent() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Initialize app without environment variable checks (for browser compatibility)
+    // Initialize app with detailed error handling
     const initializeApp = async () => {
       try {
         console.log('Initializing app...');
+        console.log('Environment variables:', {
+          VITE_API_BASE_URL: import.meta.env.VITE_API_BASE_URL,
+          VITE_SUPABASE_URL: import.meta.env.VITE_SUPABASE_URL,
+          MODE: import.meta.env.MODE,
+          DEV: import.meta.env.DEV
+        });
         
-        // Skip database connection test for now since it's handled by the backend
-        // The frontend should communicate with the backend API instead
+        // Test basic functionality
+        console.log('Testing localStorage...');
+        localStorage.setItem('test', 'working');
+        localStorage.removeItem('test');
         
         console.log('App initialized successfully');
         setIsLoading(false);
       } catch (err) {
         console.error('App initialization error:', err);
+        console.error('Error stack:', (err as Error).stack);
         setError('Failed to initialize application: ' + (err as Error).message);
       }
     };
+
+    // Add global error handler
+    window.addEventListener('error', (event) => {
+      console.error('Global error:', event.error);
+      setError('Runtime error: ' + event.error?.message);
+    });
+
+    window.addEventListener('unhandledrejection', (event) => {
+      console.error('Unhandled promise rejection:', event.reason);
+      setError('Promise rejection: ' + event.reason);
+    });
 
     initializeApp();
   }, []);
