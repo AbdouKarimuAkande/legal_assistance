@@ -1,15 +1,12 @@
-
 import { pool } from '../lib/mysql';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { authenticator } from 'otplib';
-import sgMail from '@sendgrid/mail';
 import QRCode from 'qrcode';
 import { generateCharId } from '../lib/mysql';
 import { RowDataPacket, ResultSetHeader } from 'mysql2';
 
 // Initialize SendGrid
-sgMail.setApiKey(import.meta.env.VITE_SENDGRID_API_KEY || '');
 
 export interface AuthResponse {
   user?: any;
@@ -113,7 +110,7 @@ export class AuthService {
         if (user.two_factor_method === '2fa_email') {
           await this.send2FAEmail(user.id, email);
         }
-        
+
         return {
           requireTwoFactor: true,
           twoFactorMethod: user.two_factor_method,
@@ -247,7 +244,7 @@ export class AuthService {
       `,
     };
 
-    await sgMail.send(msg);
+    
   }
 
   async send2FAEmail(userId: string, email: string): Promise<void> {
@@ -274,7 +271,7 @@ export class AuthService {
       `,
     };
 
-    await sgMail.send(msg);
+    
   }
 
   async logout(): Promise<void> {
