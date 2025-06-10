@@ -1,10 +1,9 @@
-import { pool } from '../lib/mysql';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { authenticator } from 'otplib';
 import QRCode from 'qrcode';
-import { generateCharId } from '../lib/mysql';
-import { RowDataPacket, ResultSetHeader } from 'mysql2';
+import { v4 as uuidv4 } from 'uuid';
+import { supabase } from '../lib/supabase';
 
 // Initialize SendGrid
 
@@ -17,7 +16,7 @@ export interface AuthResponse {
 }
 
 export class AuthService {
-  private jwtSecret = import.meta.env.VITE_JWT_SECRET || 'default-secret';
+  private jwtSecret = (import.meta as any).env.VITE_JWT_SECRET || 'default-secret';
 
   async register(
     name: string,
@@ -28,12 +27,13 @@ export class AuthService {
   ): Promise<AuthResponse> {
     try {
       // Check if user already exists
-      const [existingUsers] = await pool.execute<RowDataPacket[]>(
-        'SELECT id FROM users WHERE email = ?',
-        [email]
-      );
+      const { data: existingUsers, error: checkError } = await supabase
+        .from('users')
+        .select('id')
+        .eq('email', email);
 
-      if (existingUsers.length > 0) {
+      if (checkError) throw checkError;
+      if (existingUsers && existingUsers.length > 0) {
         throw new Error('User already exists');
       }
 
@@ -42,7 +42,7 @@ export class AuthService {
 
       // Generate TOTP secret if needed
       let twoFactorSecret = null;
-      let qrCodeUrl = null;
+      let qrCodeUrl: string | undefined = undefined;
 
       if (twoFactorEnabled && twoFactorMethod === '2fa_totp') {
         twoFactorSecret = authenticator.generateSecret();
@@ -51,31 +51,34 @@ export class AuthService {
       }
 
       // Create user
-      const userId = generateCharId(16);
-      await pool.execute<ResultSetHeader>(
-        `INSERT INTO users (id, name, email, password_hash, two_factor_enabled, two_factor_method, two_factor_secret)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        [userId, name, email, passwordHash, twoFactorEnabled, twoFactorEnabled ? twoFactorMethod : null, twoFactorSecret]
-      );
+      const userId = uuidv4();
+      const { data: userData, error: insertError } = await supabase
+        .from('users')
+        .insert([{
+          id: userId,
+          name,
+          email,
+          password_hash: passwordHash,
+          two_factor_enabled: twoFactorEnabled,
+          two_factor_method: twoFactorEnabled ? twoFactorMethod : null,
+          two_factor_secret: twoFactorSecret
+        }])
+        .select()
+        .single();
 
-      const [users] = await pool.execute<RowDataPacket[]>(
-        'SELECT * FROM users WHERE id = ?',
-        [userId]
-      );
-
-      const user = users[0];
+      if (insertError) throw insertError;
 
       // Send email verification
-      await this.sendEmailVerification(user.id, email);
+      await this.sendEmailVerification(userData.id, email);
 
       return {
         user: {
-          id: user.id,
-          name: user.name,
-          email: user.email,
-          isLawyer: user.is_lawyer,
-          twoFactorEnabled: user.two_factor_enabled,
-          emailVerified: user.email_verified,
+          id: userData.id,
+          name: userData.name,
+          email: userData.email,
+          isLawyer: userData.is_lawyer,
+          twoFactorEnabled: userData.two_factor_enabled,
+          emailVerified: userData.email_verified,
         },
         qrCodeUrl,
       };
@@ -88,12 +91,13 @@ export class AuthService {
   async login(email: string, password: string): Promise<AuthResponse> {
     try {
       // Get user
-      const [users] = await pool.execute<RowDataPacket[]>(
-        'SELECT * FROM users WHERE email = ?',
-        [email]
-      );
+      const { data: users, error: selectError } = await supabase
+        .from('users')
+        .select('*')
+        .eq('email', email);
 
-      if (users.length === 0) {
+      if (selectError) throw selectError;
+      if (!users || users.length === 0) {
         throw new Error('Invalid credentials');
       }
 
@@ -125,10 +129,12 @@ export class AuthService {
       );
 
       // Update last active
-      await pool.execute<ResultSetHeader>(
-        'UPDATE users SET last_active = CURRENT_TIMESTAMP WHERE id = ?',
-        [user.id]
-      );
+      const { error: updateError } = await supabase
+        .from('users')
+        .update({ last_active: new Date().toISOString() })
+        .eq('id', user.id);
+
+      if (updateError) console.error('Failed to update last active:', updateError);
 
       return {
         user: {
@@ -150,12 +156,13 @@ export class AuthService {
   async verifyTwoFactor(email: string, code: string): Promise<AuthResponse> {
     try {
       // Get user
-      const [users] = await pool.execute<RowDataPacket[]>(
-        'SELECT * FROM users WHERE email = ?',
-        [email]
-      );
+      const { data: users, error: selectError } = await supabase
+        .from('users')
+        .select('*')
+        .eq('email', email);
 
-      if (users.length === 0) {
+      if (selectError) throw selectError;
+      if (!users || users.length === 0) {
         throw new Error('User not found');
       }
 
@@ -164,19 +171,26 @@ export class AuthService {
 
       if (user.two_factor_method === '2fa_email') {
         // Verify email code
-        const [codes] = await pool.execute<RowDataPacket[]>(
-          `SELECT * FROM verification_codes 
-           WHERE user_id = ? AND type = '2fa_email' AND code = ? AND used = FALSE AND expires_at > NOW()`,
-          [user.id, code]
-        );
+        const { data: codes, error: codeError } = await supabase
+          .from('verification_codes')
+          .select('*')
+          .eq('user_id', user.id)
+          .eq('type', '2fa_email')
+          .eq('code', code)
+          .eq('used', false)
+          .gt('expires_at', new Date().toISOString());
 
-        if (codes.length > 0) {
+        if (codeError) throw codeError;
+
+        if (codes && codes.length > 0) {
           isValidCode = true;
           // Mark code as used
-          await pool.execute<ResultSetHeader>(
-            'UPDATE verification_codes SET used = TRUE WHERE id = ?',
-            [codes[0].id]
-          );
+          const { error: updateError } = await supabase
+            .from('verification_codes')
+            .update({ used: true })
+            .eq('id', codes[0].id);
+
+          if (updateError) throw updateError;
         }
       } else if (user.two_factor_method === '2fa_totp') {
         // Verify TOTP code
@@ -198,10 +212,12 @@ export class AuthService {
       );
 
       // Update last active
-      await pool.execute<ResultSetHeader>(
-        'UPDATE users SET last_active = CURRENT_TIMESTAMP WHERE id = ?',
-        [user.id]
-      );
+      const { error: updateError } = await supabase
+        .from('users')
+        .update({ last_active: new Date().toISOString() })
+        .eq('id', user.id);
+
+      if (updateError) console.error('Failed to update last active:', updateError);
 
       return {
         user: {
@@ -225,26 +241,20 @@ export class AuthService {
     const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
 
     // Store verification code
-    await pool.execute<ResultSetHeader>(
-      `INSERT INTO verification_codes (id, user_id, code, type, expires_at)
-       VALUES (?, ?, ?, 'email_verification', ?)`,
-      [uuidv4(), userId, code, expiresAt]
-    );
+    const { error } = await supabase
+      .from('verification_codes')
+      .insert([{
+        id: uuidv4(),
+        user_id: userId,
+        code,
+        type: 'email_verification',
+        expires_at: expiresAt.toISOString()
+      }]);
 
-    // Send email
-    const msg = {
-      to: email,
-      from: import.meta.env.VITE_SENDGRID_FROM_EMAIL || 'noreply@lawhelp.cm',
-      subject: 'Verify your email - LawHelp',
-      html: `
-        <h2>Welcome to LawHelp!</h2>
-        <p>Please verify your email address using the code below:</p>
-        <h3 style="background: #f0f0f0; padding: 10px; text-align: center;">${code}</h3>
-        <p>This code expires in 15 minutes.</p>
-      `,
-    };
+    if (error) throw error;
 
-    
+    // In a real implementation, you would send the email through the backend
+    console.log('Email verification code:', code);
   }
 
   async send2FAEmail(userId: string, email: string): Promise<void> {
@@ -252,26 +262,20 @@ export class AuthService {
     const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
 
     // Store verification code
-    await pool.execute<ResultSetHeader>(
-      `INSERT INTO verification_codes (id, user_id, code, type, expires_at)
-       VALUES (?, ?, ?, '2fa_email', ?)`,
-      [uuidv4(), userId, code, expiresAt]
-    );
+    const { error } = await supabase
+      .from('verification_codes')
+      .insert([{
+        id: uuidv4(),
+        user_id: userId,
+        code,
+        type: '2fa_email',
+        expires_at: expiresAt.toISOString()
+      }]);
 
-    // Send email
-    const msg = {
-      to: email,
-      from: import.meta.env.VITE_SENDGRID_FROM_EMAIL || 'noreply@lawhelp.cm',
-      subject: 'Two-Factor Authentication Code - LawHelp',
-      html: `
-        <h2>Two-Factor Authentication</h2>
-        <p>Your verification code is:</p>
-        <h3 style="background: #f0f0f0; padding: 10px; text-align: center;">${code}</h3>
-        <p>This code expires in 5 minutes.</p>
-      `,
-    };
+    if (error) throw error;
 
-    
+    // In a real implementation, you would send the email through the backend
+    console.log('2FA verification code:', code);
   }
 
   async logout(): Promise<void> {
