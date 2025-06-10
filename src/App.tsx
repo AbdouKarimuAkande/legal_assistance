@@ -93,7 +93,7 @@ function AppContent() {
     );
   }
 
-  return <MainApp />);
+  return <MainApp />;
 }
 
 export default App;
