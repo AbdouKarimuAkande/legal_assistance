@@ -1,5 +1,5 @@
 
-import { pool } from '../lib/mysql';
+import { pool, generateCharId } from '../lib/mysql';
 import { RowDataPacket, ResultSetHeader } from 'mysql2';
 
 export class DatabaseService {
@@ -25,7 +25,7 @@ export class DatabaseService {
       // Create users table
       await connection.execute(`
         CREATE TABLE IF NOT EXISTS users (
-          id VARCHAR(36) PRIMARY KEY DEFAULT (UUID()),
+          id CHAR(16) PRIMARY KEY,
           email VARCHAR(255) UNIQUE NOT NULL,
           name VARCHAR(255) NOT NULL,
           password_hash VARCHAR(255) NOT NULL,
@@ -44,8 +44,8 @@ export class DatabaseService {
       // Create chat_sessions table
       await connection.execute(`
         CREATE TABLE IF NOT EXISTS chat_sessions (
-          id VARCHAR(36) PRIMARY KEY DEFAULT (UUID()),
-          user_id VARCHAR(36) NOT NULL,
+          id CHAR(16) PRIMARY KEY,
+          user_id CHAR(16) NOT NULL,
           title VARCHAR(255) NOT NULL,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -56,9 +56,9 @@ export class DatabaseService {
       // Create chat_messages table
       await connection.execute(`
         CREATE TABLE IF NOT EXISTS chat_messages (
-          id VARCHAR(36) PRIMARY KEY DEFAULT (UUID()),
-          session_id VARCHAR(36) NOT NULL,
-          user_id VARCHAR(36) NOT NULL,
+          id CHAR(16) PRIMARY KEY,
+          session_id CHAR(16) NOT NULL,
+          user_id CHAR(16) NOT NULL,
           message TEXT NOT NULL,
           sender ENUM('user', 'bot') NOT NULL,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -70,8 +70,8 @@ export class DatabaseService {
       // Create verification_codes table
       await connection.execute(`
         CREATE TABLE IF NOT EXISTS verification_codes (
-          id VARCHAR(36) PRIMARY KEY DEFAULT (UUID()),
-          user_id VARCHAR(36) NOT NULL,
+          id CHAR(16) PRIMARY KEY,
+          user_id CHAR(16) NOT NULL,
           code VARCHAR(10) NOT NULL,
           type ENUM('email_verification', '2fa_email', 'password_reset') NOT NULL,
           expires_at TIMESTAMP NOT NULL,
@@ -106,7 +106,10 @@ export class DatabaseService {
   // Create or update user
   static async upsertUser(userData: any) {
     try {
-      const { id, email, name, password_hash, is_lawyer, two_factor_enabled, two_factor_method, two_factor_secret, phone, email_verified } = userData;
+      const { email, name, password_hash, is_lawyer, two_factor_enabled, two_factor_method, two_factor_secret, phone, email_verified } = userData;
+      
+      // Generate CHAR ID if not provided
+      const userId = userData.id || generateCharId(16);
       
       const [result] = await pool.execute<ResultSetHeader>(
         `INSERT INTO users (id, email, name, password_hash, is_lawyer, two_factor_enabled, two_factor_method, two_factor_secret, phone, email_verified)
@@ -121,14 +124,10 @@ export class DatabaseService {
          phone = VALUES(phone),
          email_verified = VALUES(email_verified),
          updated_at = CURRENT_TIMESTAMP`,
-        [id, email, name, password_hash, is_lawyer || false, two_factor_enabled || false, two_factor_method, two_factor_secret, phone, email_verified || false]
+        [userId, email, name, password_hash, is_lawyer || false, two_factor_enabled || false, two_factor_method, two_factor_secret, phone, email_verified || false]
       );
 
-      if (result.insertId) {
-        return await this.getUserByEmail(email);
-      } else {
-        return await this.getUserByEmail(email);
-      }
+      return await this.getUserByEmail(email);
     } catch (error) {
       console.error('Error upserting user:', error);
       throw error;

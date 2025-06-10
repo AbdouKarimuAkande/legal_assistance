@@ -10,7 +10,15 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { authenticator } from 'otplib';
 import sgMail from '@sendgrid/mail';
-import { v4 as uuidv4 } from 'uuid';
+// Helper function to generate CHAR ID
+function generateCharId(length = 16) {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  let result = '';
+  for (let i = 0; i < length; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
+}
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -78,7 +86,7 @@ app.post('/api/auth/register', async (req, res) => {
     }
 
     // Create user
-    const userId = uuidv4();
+    const userId = generateCharId(16);
     await pool.execute(
       `INSERT INTO users (id, name, email, password_hash, two_factor_enabled, two_factor_method, two_factor_secret)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,

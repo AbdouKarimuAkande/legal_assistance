@@ -14,6 +14,16 @@ const dbConfig = {
 
 export const pool = mysql.createPool(dbConfig);
 
+// Helper function to generate unique CHAR ID
+export function generateCharId(length: number = 16): string {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  let result = '';
+  for (let i = 0; i < length; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
+}
+
 // Database Types
 export interface User {
   id: string;

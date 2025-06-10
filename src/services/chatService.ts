@@ -1,6 +1,6 @@
 
 import { pool } from '../lib/mysql';
-import { v4 as uuidv4 } from 'uuid';
+import { generateCharId } from '../lib/mysql';
 import { RowDataPacket, ResultSetHeader } from 'mysql2';
 
 export interface ChatSession {
@@ -22,7 +22,7 @@ export interface ChatMessage {
 
 export class ChatService {
   async createSession(userId: string, title: string): Promise<ChatSession> {
-    const sessionId = uuidv4();
+    const sessionId = generateCharId(16);
     
     await pool.execute<ResultSetHeader>(
       'INSERT INTO chat_sessions (id, user_id, title) VALUES (?, ?, ?)',
@@ -60,7 +60,7 @@ export class ChatService {
   }
 
   async addMessage(sessionId: string, userId: string, message: string, sender: 'user' | 'bot'): Promise<ChatMessage> {
-    const messageId = uuidv4();
+    const messageId = generateCharId(16);
     
     await pool.execute<ResultSetHeader>(
       'INSERT INTO chat_messages (id, session_id, user_id, message, sender) VALUES (?, ?, ?, ?, ?)',

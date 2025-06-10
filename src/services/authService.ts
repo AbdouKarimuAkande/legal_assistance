@@ -5,7 +5,7 @@ import jwt from 'jsonwebtoken';
 import { authenticator } from 'otplib';
 import sgMail from '@sendgrid/mail';
 import QRCode from 'qrcode';
-import { v4 as uuidv4 } from 'uuid';
+import { generateCharId } from '../lib/mysql';
 import { RowDataPacket, ResultSetHeader } from 'mysql2';
 
 // Initialize SendGrid
@@ -54,7 +54,7 @@ export class AuthService {
       }
 
       // Create user
-      const userId = uuidv4();
+      const userId = generateCharId(16);
       await pool.execute<ResultSetHeader>(
         `INSERT INTO users (id, name, email, password_hash, two_factor_enabled, two_factor_method, two_factor_secret)
          VALUES (?, ?, ?, ?, ?, ?, ?)`,
