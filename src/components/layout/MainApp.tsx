@@ -1,39 +1,61 @@
-
 import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import Navbar from './Navbar';
 import ChatScreen from '../chat/ChatScreen';
-import AuthScreen from '../auth/AuthScreen';
-
-type Screen = 'chat' | 'history' | 'profile' | 'lawyers';
+import LawyerDirectoryScreen from '../lawyers/LawyerDirectoryScreen';
+import LawyerRegistrationScreen from '../lawyers/LawyerRegistrationScreen';
 
 const MainApp: React.FC = () => {
-  const { isAuthenticated } = useAuth();
-  const [currentScreen, setCurrentScreen] = useState<Screen>('chat');
+  const { user } = useAuth();
+  const [activeTab, setActiveTab] = useState<'chat' | 'lawyers' | 'profile'>('chat');
+  const [showLawyerRegistration, setShowLawyerRegistration] = useState(false);
 
-  if (!isAuthenticated) {
-    return <AuthScreen />;
-  }
+  const handleBecomeLawyer = () => {
+    setShowLawyerRegistration(true);
+  };
 
-  const renderScreen = () => {
-    switch (currentScreen) {
-      case 'chat':
-        return <ChatScreen />;
-      case 'history':
-        return <div className="p-4 text-center">History Screen - Coming Soon</div>;
-      case 'profile':
-        return <div className="p-4 text-center">Profile Screen - Coming Soon</div>;
-      case 'lawyers':
-        return <div className="p-4 text-center">Lawyers Directory - Coming Soon</div>;
-      default:
-        return <ChatScreen />;
-    }
+  const handleBackToDirectory = () => {
+    setShowLawyerRegistration(false);
   };
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      <Navbar currentScreen={currentScreen} setCurrentScreen={setCurrentScreen} />
-      <main>{renderScreen()}</main>
+      <Navbar activeTab={activeTab} setActiveTab={setActiveTab} />
+
+      <div className="pt-16">
+        {activeTab === 'chat' && <ChatScreen />}
+        {activeTab === 'lawyers' && !showLawyerRegistration && (
+          <LawyerDirectoryScreen onBecomeLawyer={handleBecomeLawyer} />
+        )}
+        {activeTab === 'lawyers' && showLawyerRegistration && (
+          <div>
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+              <button
+                onClick={handleBackToDirectory}
+                className="flex items-center text-primary hover:text-primary-dark mb-4"
+              >
+                ← Back to Directory
+              </button>
+            </div>
+            <LawyerRegistrationScreen />
+          </div>
+        )}
+        {activeTab === 'profile' && (
+          <div className="max-w-4xl mx-auto p-6">
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
+              Profile Settings
+            </h2>
+            <div className="bg-white dark:bg-gray-800 rounded-lg p-6">
+              <p className="text-gray-600 dark:text-gray-400 mb-4">
+                Welcome, {user?.name}!
+              </p>
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                Email: {user?.email}
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 };
