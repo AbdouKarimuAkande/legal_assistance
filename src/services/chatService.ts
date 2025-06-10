@@ -1,30 +1,30 @@
-
 import { pool, generateCharId } from '../lib/mysql';
-
-export interface ChatMessage {
-  id: string;
-  sessionId: string;
-  userId: string;
-  message: string;
-  sender: 'user' | 'bot';
-  createdAt: string;
-}
 
 export interface ChatSession {
   id: string;
-  userId: string;
+  user_id: string;
   title: string;
-  createdAt: string;
-  updatedAt: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ChatMessage {
+  id: string;
+  session_id: string;
+  user_id: string;
+  message: string;
+  sender: 'user' | 'bot';
+  created_at: string;
 }
 
 export class ChatService {
   async createSession(userId: string, title: string): Promise<ChatSession> {
     try {
       const sessionId = generateCharId();
-      
+
       await pool.execute(
-        `INSERT INTO chat_sessions (id, user_id, title) VALUES (?, ?, ?)`,
+        `INSERT INTO chat_sessions (id, user_id, title, created_at, updated_at)
+         VALUES (?, ?, ?, NOW(), NOW())`,
         [sessionId, userId, title]
       );
 
@@ -33,15 +33,7 @@ export class ChatService {
         [sessionId]
       );
 
-      const session = (sessions as any[])[0];
-      
-      return {
-        id: session.id,
-        userId: session.user_id,
-        title: session.title,
-        createdAt: session.created_at,
-        updatedAt: session.updated_at,
-      };
+      return (sessions as any[])[0];
     } catch (error) {
       console.error('Error creating chat session:', error);
       throw error;
@@ -55,31 +47,20 @@ export class ChatService {
         [userId]
       );
 
-      return (sessions as any[]).map(session => ({
-        id: session.id,
-        userId: session.user_id,
-        title: session.title,
-        createdAt: session.created_at,
-        updatedAt: session.updated_at,
-      }));
+      return sessions as ChatSession[];
     } catch (error) {
       console.error('Error fetching user sessions:', error);
       throw error;
     }
   }
 
-  async addMessage(
-    sessionId: string,
-    userId: string,
-    message: string,
-    sender: 'user' | 'bot'
-  ): Promise<ChatMessage> {
+  async addMessage(sessionId: string, userId: string, message: string, sender: 'user' | 'bot'): Promise<ChatMessage> {
     try {
       const messageId = generateCharId();
-      
+
       await pool.execute(
-        `INSERT INTO chat_messages (id, session_id, user_id, message, sender) 
-         VALUES (?, ?, ?, ?, ?)`,
+        `INSERT INTO chat_messages (id, session_id, user_id, message, sender, created_at)
+         VALUES (?, ?, ?, ?, ?, NOW())`,
         [messageId, sessionId, userId, message, sender]
       );
 
@@ -94,16 +75,7 @@ export class ChatService {
         [messageId]
       );
 
-      const msg = (messages as any[])[0];
-      
-      return {
-        id: msg.id,
-        sessionId: msg.session_id,
-        userId: msg.user_id,
-        message: msg.message,
-        sender: msg.sender,
-        createdAt: msg.created_at,
-      };
+      return (messages as any[])[0];
     } catch (error) {
       console.error('Error adding message:', error);
       throw error;
@@ -117,14 +89,7 @@ export class ChatService {
         [sessionId]
       );
 
-      return (messages as any[]).map(msg => ({
-        id: msg.id,
-        sessionId: msg.session_id,
-        userId: msg.user_id,
-        message: msg.message,
-        sender: msg.sender,
-        createdAt: msg.created_at,
-      }));
+      return messages as ChatMessage[];
     } catch (error) {
       console.error('Error fetching session messages:', error);
       throw error;
@@ -133,19 +98,24 @@ export class ChatService {
 
   async deleteSession(sessionId: string, userId: string): Promise<void> {
     try {
-      // Delete messages first
-      await pool.execute(
-        'DELETE FROM chat_messages WHERE session_id = ?',
-        [sessionId]
-      );
-
-      // Delete session
       await pool.execute(
         'DELETE FROM chat_sessions WHERE id = ? AND user_id = ?',
         [sessionId, userId]
       );
     } catch (error) {
       console.error('Error deleting session:', error);
+      throw error;
+    }
+  }
+
+  async updateSessionTitle(sessionId: string, userId: string, title: string): Promise<void> {
+    try {
+      await pool.execute(
+        'UPDATE chat_sessions SET title = ?, updated_at = NOW() WHERE id = ? AND user_id = ?',
+        [title, sessionId, userId]
+      );
+    } catch (error) {
+      console.error('Error updating session title:', error);
       throw error;
     }
   }

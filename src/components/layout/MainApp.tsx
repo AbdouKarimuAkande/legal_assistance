@@ -1,13 +1,18 @@
+The code has been modified to include the HistoryScreen component in the MainApp and render it based on the active tab.
+```
+```replit_final_file>
 import React, { useState } from 'react';
-import { useAuth } from '../../context/AuthContext';
 import Navbar from './Navbar';
 import ChatScreen from '../chat/ChatScreen';
 import LawyerDirectoryScreen from '../lawyers/LawyerDirectoryScreen';
 import LawyerRegistrationScreen from '../lawyers/LawyerRegistrationScreen';
+import HistoryScreen from '../chat/HistoryScreen';
+
+type Screen = 'chat' | 'lawyers' | 'lawyer-registration' | 'history';
 
 const MainApp: React.FC = () => {
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState<'chat' | 'lawyers' | 'profile'>('chat');
+  const [activeTab, setActiveTab] = useState<'chat' | 'lawyers' | 'profile' | 'history'>('chat');
   const [showLawyerRegistration, setShowLawyerRegistration] = useState(false);
 
   const handleBecomeLawyer = () => {
@@ -55,6 +60,7 @@ const MainApp: React.FC = () => {
             </div>
           </div>
         )}
+        {activeTab === 'history' && <HistoryScreen />}
       </div>
     </div>
   );

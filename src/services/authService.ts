@@ -1,4 +1,7 @@
-// Browser-compatible authentication service
+
+import { pool, generateCharId } from '../lib/mysql';
+import bcrypt from 'bcryptjs';
+
 export interface AuthResponse {
   user?: any;
   token?: string;
@@ -20,20 +23,60 @@ export class AuthService {
     try {
       console.log('Attempting registration...');
 
-      // For now, return mock response since backend is not connected
+      // Check if user already exists
+      const [existingUsers] = await pool.execute(
+        'SELECT * FROM users WHERE email = ?',
+        [email]
+      );
+
+      if ((existingUsers as any[]).length > 0) {
+        throw new Error('User already exists with this email');
+      }
+
+      // Hash password
+      const passwordHash = await bcrypt.hash(password, 12);
+      const userId = generateCharId();
+
+      // Insert new user
+      await pool.execute(
+        `INSERT INTO users (
+          id, email, name, password_hash, is_lawyer, 
+          two_factor_enabled, two_factor_method, email_verified,
+          created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
+        [
+          userId,
+          email,
+          name,
+          passwordHash,
+          false,
+          twoFactorEnabled,
+          twoFactorEnabled ? twoFactorMethod : null,
+          false
+        ]
+      );
+
+      // Fetch the created user
+      const [users] = await pool.execute(
+        'SELECT id, name, email, is_lawyer, two_factor_enabled, email_verified FROM users WHERE id = ?',
+        [userId]
+      );
+
+      const user = (users as any[])[0];
+
       return {
         user: {
-          id: 'mock-user-id',
-          name,
-          email,
-          isLawyer: false,
-          twoFactorEnabled,
-          emailVerified: false,
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          isLawyer: user.is_lawyer,
+          twoFactorEnabled: user.two_factor_enabled,
+          emailVerified: user.email_verified,
         },
       };
     } catch (error) {
       console.error('Registration error:', error);
-      throw new Error('Registration service not available');
+      throw error;
     }
   }
 
@@ -41,22 +84,55 @@ export class AuthService {
     try {
       console.log('Attempting login...');
 
-      // Demo credentials check
-      if (email === 'abdou@gmail.com' && password === 'abdou1') {
+      // Fetch user from database
+      const [users] = await pool.execute(
+        'SELECT * FROM users WHERE email = ?',
+        [email]
+      );
+
+      if ((users as any[]).length === 0) {
+        throw new Error('Invalid credentials');
+      }
+
+      const user = (users as any[])[0];
+
+      // Verify password
+      const isValidPassword = await bcrypt.compare(password, user.password_hash);
+      
+      if (!isValidPassword) {
+        throw new Error('Invalid credentials');
+      }
+
+      // Update last active
+      await pool.execute(
+        'UPDATE users SET last_active = NOW() WHERE id = ?',
+        [user.id]
+      );
+
+      // Check if 2FA is enabled
+      if (user.two_factor_enabled) {
+        // Send 2FA code if email method
+        if (user.two_factor_method === '2fa_email') {
+          await this.send2FAEmail(user.id, user.email);
+        }
+
         return {
-          user: {
-            id: 'demo-user-id',
-            name: 'Demo User',
-            email,
-            isLawyer: false,
-            twoFactorEnabled: false,
-            emailVerified: true,
-          },
-          token: 'demo-jwt-token',
+          requireTwoFactor: true,
+          twoFactorMethod: user.two_factor_method,
         };
       }
 
-      throw new Error('Invalid credentials');
+      return {
+        user: {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          isLawyer: user.is_lawyer,
+          twoFactorEnabled: user.two_factor_enabled,
+          emailVerified: user.email_verified,
+        },
+        token: 'jwt-token-' + user.id,
+      };
     } catch (error) {
       console.error('Login error:', error);
       throw error;
@@ -67,22 +143,45 @@ export class AuthService {
     try {
       console.log('Verifying 2FA...');
 
-      // Mock 2FA verification
-      if (code === '123456') {
-        return {
-          user: {
-            id: 'demo-user-id',
-            name: 'Demo User',
-            email,
-            isLawyer: false,
-            twoFactorEnabled: true,
-            emailVerified: true,
-          },
-          token: 'demo-jwt-token',
-        };
+      // Fetch user
+      const [users] = await pool.execute(
+        'SELECT * FROM users WHERE email = ?',
+        [email]
+      );
+
+      if ((users as any[]).length === 0) {
+        throw new Error('User not found');
       }
 
-      throw new Error('Invalid verification code');
+      const user = (users as any[])[0];
+
+      // Check verification code
+      const [codes] = await pool.execute(
+        'SELECT * FROM verification_codes WHERE user_id = ? AND code = ? AND type = ? AND used = FALSE AND expires_at > NOW()',
+        [user.id, code, '2fa_email']
+      );
+
+      if ((codes as any[]).length === 0) {
+        throw new Error('Invalid or expired verification code');
+      }
+
+      // Mark code as used
+      await pool.execute(
+        'UPDATE verification_codes SET used = TRUE WHERE id = ?',
+        [(codes as any[])[0].id]
+      );
+
+      return {
+        user: {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          isLawyer: user.is_lawyer,
+          twoFactorEnabled: user.two_factor_enabled,
+          emailVerified: user.email_verified,
+        },
+        token: 'jwt-token-' + user.id,
+      };
     } catch (error) {
       console.error('2FA verification error:', error);
       throw error;
@@ -90,11 +189,29 @@ export class AuthService {
   }
 
   async sendEmailVerification(userId: string, email: string): Promise<void> {
-    console.log('Email verification code: 123456');
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    const codeId = generateCharId();
+
+    await pool.execute(
+      `INSERT INTO verification_codes (id, user_id, code, type, expires_at, created_at)
+       VALUES (?, ?, ?, ?, DATE_ADD(NOW(), INTERVAL 15 MINUTE), NOW())`,
+      [codeId, userId, code, 'email_verification']
+    );
+
+    console.log(`Email verification code for ${email}: ${code}`);
   }
 
   async send2FAEmail(userId: string, email: string): Promise<void> {
-    console.log('2FA verification code: 123456');
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    const codeId = generateCharId();
+
+    await pool.execute(
+      `INSERT INTO verification_codes (id, user_id, code, type, expires_at, created_at)
+       VALUES (?, ?, ?, ?, DATE_ADD(NOW(), INTERVAL 10 MINUTE), NOW())`,
+      [codeId, userId, code, '2fa_email']
+    );
+
+    console.log(`2FA verification code for ${email}: ${code}`);
   }
 
   async logout(): Promise<void> {
