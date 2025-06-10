@@ -1,0 +1,41 @@
+  ➜  Local:   http://localhost:5000/
+  ➜  press h + enter to show help
+Error: The following dependencies are imported but could not be resolved:
+
+  @sendgrid/mail (imported by C:/Users/Abdou Karim/Desktop/legalassistance/src/services/authService.ts)
+
+Are they installed?
+    at file:///C:/Users/Abdou%20Karim/Desktop/legalassistance/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:14849:15
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async file:///C:/Users/Abdou%20Karim/Desktop/legalassistance/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:46985:28
+07:44:09 [vite] (client) Pre-transform error: Failed to load PostCSS config (searchPath: C:/Users/Abdou Karim/Desktop/legalassistance): [ReferenceError] module is not defined in ES module scope
+This file is being treated as an ES module because it has a '.js' file extension and 'C:\Users\Abdou Karim\Desktop\legalassistance\package.json' contains "type": "module". To treat it as a CommonJS script, rename it to use the '.cjs' file extension.
+ReferenceError: module is not defined in ES module scope
+This file is being treated as an ES module because it has a '.js' file extension and 'C:\Users\Abdou Karim\Desktop\legalassistance\package.json' contains "type": "module". To treat it as a CommonJS script, rename it to use the '.cjs' file extension.
+    at file:///C:/Users/Abdou%20Karim/Desktop/legalassistance/postcss.config.js?t=1749534245631:2:1
+    at ModuleJob.run (node:internal/modules/esm/module_job:271:25)
+    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:578:26)
+    at async req$3 (file:///C:/Users/Abdou%20Karim/Desktop/legalassistance/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:11658:13)
+    at async Object.search (file:///C:/Users/Abdou%20Karim/Desktop/legalassistance/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:11400:23)
+  Plugin: vite:css
+  File: C:/Users/Abdou Karim/Desktop/legalassistance/src/index.css
+07:44:09 [vite] Internal server error: Failed to load PostCSS config (searchPath: C:/Users/Abdou Karim/Desktop/legalassistance): [ReferenceError] module is not defined in ES module scope
+This file is being treated as an ES module because it has a '.js' file extension and 'C:\Users\Abdou Karim\Desktop\legalassistance\package.json' contains "type": "module". To treat it as a CommonJS script, rename it to use the '.cjs' file extension.
+ReferenceError: module is not defined in ES module scope
+This file is being treated as an ES module because it has a '.js' file extension and 'C:\Users\Abdou Karim\Desktop\legalassistance\package.json' contains "type": "module". To treat it as a CommonJS script, rename it to use the '.cjs' file extension.
+    at file:///C:/Users/Abdou%20Karim/Desktop/legalassistance/postcss.config.js?t=1749534245631:2:1
+    at ModuleJob.run (node:internal/modules/esm/module_job:271:25)
+    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:578:26)
+    at async req$3 (file:///C:/Users/Abdou%20Karim/Desktop/legalassistance/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:11658:13)
+    at async Object.search (file:///C:/Users/Abdou%20Karim/Desktop/legalassistance/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:11400:23)
+  Plugin: vite:css
+  File: C:/Users/Abdou Karim/Desktop/legalassistance/src/index.css
+07:44:09 [vite] (client) Pre-transform error: Failed to resolve import "@sendgrid/mail" from "src/services/authService.ts". Does the file exist?
+  Plugin: vite:import-analysis
+  File: C:/Users/Abdou Karim/Desktop/legalassistance/src/services/authService.ts:6:19
+  3  |  import jwt from "jsonwebtoken";
+  4  |  import { authenticator } from "otplib";
+  5  |  import sgMail from "@sendgrid/mail";
+     |                      ^
+  6  |  import QRCode from "qrcode";
+  7  |  import { generateCharId } from "../lib/mysql";
