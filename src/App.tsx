@@ -21,37 +21,14 @@ function AppContent() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Check for required environment variables and test database connection
+    // Initialize app without environment variable checks (for browser compatibility)
     const initializeApp = async () => {
       try {
-        // Check if required environment variables are set
-        const requiredEnvVars = [
-          'DB_HOST',
-          'DB_USER',
-          'DB_PASSWORD',
-          'DB_NAME'
-        ];
-
-        const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
-
-        if (missingVars.length > 0) {
-          console.warn(`Missing environment variables: ${missingVars.join(', ')}`);
-          // Continue with defaults for development
-        }
-
-        // Test database connection
-        console.log('Testing database connection...');
-        const { DatabaseService } = await import('./services/database');
-        const isConnected = await DatabaseService.testConnection();
-
-        if (!isConnected) {
-          setError('Failed to connect to database. Please check your MySQL configuration.');
-          return;
-        }
-
-        // Initialize tables
-        await DatabaseService.initializeTables();
-
+        console.log('Initializing app...');
+        
+        // Skip database connection test for now since it's handled by the backend
+        // The frontend should communicate with the backend API instead
+        
         console.log('App initialized successfully');
         setIsLoading(false);
       } catch (err) {
