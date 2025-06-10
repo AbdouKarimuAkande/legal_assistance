@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { apiService } from '../services/api';
-import { supabase } from '../lib/supabase';
+import { AuthService } from '../services/authService';
 
 export interface User {
   id: string;
@@ -38,82 +38,44 @@ interface AuthProviderProps {
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const authService = new AuthService();
 
   useEffect(() => {
-    // Check for existing user session
-    const savedUser = localStorage.getItem('currentUser');
-    const savedToken = localStorage.getItem('authToken');
-
-    if (savedUser && savedToken) {
+    // Check for existing session on app load
+    const initAuth = async () => {
       try {
-        setUser(JSON.parse(savedUser));
+        const savedUser = localStorage.getItem('currentUser');
+        const token = localStorage.getItem('authToken');
+
+        if (savedUser && token) {
+          setUser(JSON.parse(savedUser));
+        }
       } catch (error) {
-        console.error('Error parsing saved user:', error);
+        console.error('Auth initialization error:', error);
         localStorage.removeItem('currentUser');
         localStorage.removeItem('authToken');
+      } finally {
+        setIsLoading(false);
       }
-    }
-    setIsLoading(false);
+    };
+
+    initAuth();
   }, []);
 
   const login = async (email: string, password: string) => {
     setIsLoading(true);
     try {
-      // First try Supabase auth
-      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
+      const response = await authService.login(email, password);
 
-      if (authError) {
-        console.error('Supabase auth error:', authError);
-        throw new Error(authError.message);
+      if (response.requireTwoFactor) {
+        return { requireTwoFactor: true, twoFactorMethod: response.twoFactorMethod };
       }
 
-      if (authData.user) {
-        // Get user profile from our users table
-        const { data: userData, error: userError } = await supabase
-          .from('users')
-          .select('*')
-          .eq('email', email)
-          .single();
-
-        if (userError) {
-          console.error('User data error:', userError);
-          // If user doesn't exist in our table, create them
-          const { data: newUser, error: createError } = await supabase
-            .from('users')
-            .insert({
-              id: authData.user.id,
-              email: authData.user.email || email,
-              name: authData.user.user_metadata?.name || email.split('@')[0],
-              password_hash: '', // This will be handled by Supabase auth
-              email_verified: authData.user.email_confirmed_at ? true : false,
-            })
-            .select()
-            .single();
-
-          if (createError) {
-            console.error('Create user error:', createError);
-            throw new Error('Failed to create user profile');
-          }
-          userData = newUser;
-        }
-
-        const user: User = {
-          id: userData.id,
-          name: userData.name,
-          email: userData.email,
-          isLawyer: userData.is_lawyer || false,
-          twoFactorEnabled: userData.two_factor_enabled || false,
-          emailVerified: userData.email_verified || false,
-        };
-
-        setUser(user);
-        localStorage.setItem('currentUser', JSON.stringify(user));
-        localStorage.setItem('authToken', authData.session?.access_token || '');
-
-        return { success: true, data: { user } };
+      if (response.user && response.token) {
+        setUser(response.user);
+        localStorage.setItem('currentUser', JSON.stringify(response.user));
+        localStorage.setItem('authToken', response.token);
+        return { success: true, data: response };
       }
 
       throw new Error('Login failed');
@@ -134,56 +96,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   ) => {
     setIsLoading(true);
     try {
-      // Register with Supabase auth
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: {
-            name: name,
-          }
-        }
-      });
+      const response = await authService.register(name, email, password, twoFactorEnabled, twoFactorMethod);
 
-      if (authError) {
-        console.error('Supabase registration error:', authError);
-        throw new Error(authError.message);
-      }
-
-      if (authData.user) {
-        // Create user profile in our users table
-        const { data: userData, error: userError } = await supabase
-          .from('users')
-          .insert({
-            id: authData.user.id,
-            email: email,
-            name: name,
-            password_hash: '', // Handled by Supabase auth
-            two_factor_enabled: twoFactorEnabled,
-            two_factor_method: twoFactorEnabled ? twoFactorMethod : null,
-            email_verified: false,
-          })
-          .select()
-          .single();
-
-        if (userError) {
-          console.error('User creation error:', userError);
-          throw new Error('Failed to create user profile');
-        }
-
-        const user: User = {
-          id: userData.id,
-          name: userData.name,
-          email: userData.email,
-          isLawyer: userData.is_lawyer || false,
-          twoFactorEnabled: userData.two_factor_enabled || false,
-          emailVerified: userData.email_verified || false,
-        };
-
-        setUser(user);
-        localStorage.setItem('currentUser', JSON.stringify(user));
-
-        return { success: true, data: { user } };
+      if (response.user) {
+        // Don't auto-login, require email verification
+        return { success: true, data: response, qrCodeUrl: response.qrCodeUrl };
       }
 
       throw new Error('Registration failed');
@@ -198,51 +115,47 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const verifyTwoFactor = async (email: string, code: string): Promise<boolean> => {
     setIsLoading(true);
     try {
-      const response = await apiService.verifyTwoFactor(email, code);
+      const response = await authService.verifyTwoFactor(email, code);
 
-      if (response.data?.user && response.data?.token) {
-        setUser(response.data.user);
-        localStorage.setItem('currentUser', JSON.stringify(response.data.user));
-        localStorage.setItem('authToken', response.data.token);
+      if (response.user && response.token) {
+        setUser(response.user);
+        localStorage.setItem('currentUser', JSON.stringify(response.user));
+        localStorage.setItem('authToken', response.token);
         return true;
       }
 
       return false;
     } catch (error) {
-      throw error;
+      console.error('2FA verification error:', error);
+      return false;
     } finally {
       setIsLoading(false);
     }
   };
 
   const logout = async () => {
-    setIsLoading(true);
     try {
-      await supabase.auth.signOut();
+      await authService.logout();
       setUser(null);
       localStorage.removeItem('currentUser');
       localStorage.removeItem('authToken');
     } catch (error) {
       console.error('Logout error:', error);
-      // Still clear the user even if the API fails
-      setUser(null);
-      localStorage.removeItem('currentUser');
-      localStorage.removeItem('authToken');
-    } finally {
-      setIsLoading(false);
     }
   };
 
+  const value: AuthContextType = {
+    user,
+    isAuthenticated: !!user,
+    login,
+    register,
+    verifyTwoFactor,
+    logout,
+    isLoading,
+  };
+
   return (
-    <AuthContext.Provider value={{
-      user,
-      isAuthenticated: !!user,
-      login,
-      register,
-      verifyTwoFactor,
-      logout,
-      isLoading
-    }}>
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );

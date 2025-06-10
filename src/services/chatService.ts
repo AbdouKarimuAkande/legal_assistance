@@ -1,5 +1,7 @@
 
-import { supabase } from '../lib/supabase';
+import { pool } from '../lib/mysql';
+import { v4 as uuidv4 } from 'uuid';
+import { RowDataPacket, ResultSetHeader } from 'mysql2';
 
 export interface ChatSession {
   id: string;
@@ -20,31 +22,35 @@ export interface ChatMessage {
 
 export class ChatService {
   async createSession(userId: string, title: string): Promise<ChatSession> {
-    const { data, error } = await supabase
-      .from('chat_sessions')
-      .insert({ user_id: userId, title })
-      .select()
-      .single();
+    const sessionId = uuidv4();
+    
+    await pool.execute<ResultSetHeader>(
+      'INSERT INTO chat_sessions (id, user_id, title) VALUES (?, ?, ?)',
+      [sessionId, userId, title]
+    );
 
-    if (error) throw error;
+    const [sessions] = await pool.execute<RowDataPacket[]>(
+      'SELECT * FROM chat_sessions WHERE id = ?',
+      [sessionId]
+    );
+
+    const session = sessions[0];
     return {
-      id: data.id,
-      userId: data.user_id,
-      title: data.title,
-      createdAt: data.created_at,
-      updatedAt: data.updated_at,
+      id: session.id,
+      userId: session.user_id,
+      title: session.title,
+      createdAt: session.created_at,
+      updatedAt: session.updated_at,
     };
   }
 
   async getSessions(userId: string): Promise<ChatSession[]> {
-    const { data, error } = await supabase
-      .from('chat_sessions')
-      .select('*')
-      .eq('user_id', userId)
-      .order('updated_at', { ascending: false });
+    const [sessions] = await pool.execute<RowDataPacket[]>(
+      'SELECT * FROM chat_sessions WHERE user_id = ? ORDER BY updated_at DESC',
+      [userId]
+    );
 
-    if (error) throw error;
-    return data.map(session => ({
+    return sessions.map(session => ({
       id: session.id,
       userId: session.user_id,
       title: session.title,
@@ -54,37 +60,36 @@ export class ChatService {
   }
 
   async addMessage(sessionId: string, userId: string, message: string, sender: 'user' | 'bot'): Promise<ChatMessage> {
-    const { data, error } = await supabase
-      .from('chat_messages')
-      .insert({
-        session_id: sessionId,
-        user_id: userId,
-        message,
-        sender,
-      })
-      .select()
-      .single();
+    const messageId = uuidv4();
+    
+    await pool.execute<ResultSetHeader>(
+      'INSERT INTO chat_messages (id, session_id, user_id, message, sender) VALUES (?, ?, ?, ?, ?)',
+      [messageId, sessionId, userId, message, sender]
+    );
 
-    if (error) throw error;
+    const [messages] = await pool.execute<RowDataPacket[]>(
+      'SELECT * FROM chat_messages WHERE id = ?',
+      [messageId]
+    );
+
+    const msg = messages[0];
     return {
-      id: data.id,
-      sessionId: data.session_id,
-      userId: data.user_id,
-      message: data.message,
-      sender: data.sender,
-      createdAt: data.created_at,
+      id: msg.id,
+      sessionId: msg.session_id,
+      userId: msg.user_id,
+      message: msg.message,
+      sender: msg.sender,
+      createdAt: msg.created_at,
     };
   }
 
   async getMessages(sessionId: string): Promise<ChatMessage[]> {
-    const { data, error } = await supabase
-      .from('chat_messages')
-      .select('*')
-      .eq('session_id', sessionId)
-      .order('created_at', { ascending: true });
+    const [messages] = await pool.execute<RowDataPacket[]>(
+      'SELECT * FROM chat_messages WHERE session_id = ? ORDER BY created_at ASC',
+      [sessionId]
+    );
 
-    if (error) throw error;
-    return data.map(message => ({
+    return messages.map(message => ({
       id: message.id,
       sessionId: message.session_id,
       userId: message.user_id,
@@ -95,20 +100,16 @@ export class ChatService {
   }
 
   async updateSessionTitle(sessionId: string, title: string): Promise<void> {
-    const { error } = await supabase
-      .from('chat_sessions')
-      .update({ title })
-      .eq('id', sessionId);
-
-    if (error) throw error;
+    await pool.execute<ResultSetHeader>(
+      'UPDATE chat_sessions SET title = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+      [title, sessionId]
+    );
   }
 
   async deleteSession(sessionId: string): Promise<void> {
-    const { error } = await supabase
-      .from('chat_sessions')
-      .delete()
-      .eq('id', sessionId);
-
-    if (error) throw error;
+    await pool.execute<ResultSetHeader>(
+      'DELETE FROM chat_sessions WHERE id = ?',
+      [sessionId]
+    );
   }
 }

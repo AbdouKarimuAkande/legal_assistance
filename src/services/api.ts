@@ -1,6 +1,5 @@
 
 import axios, { AxiosInstance, AxiosResponse } from 'axios';
-import { supabase } from '../lib/supabase';
 
 export interface ApiResponse<T = any> {
   success: boolean;
@@ -41,15 +40,12 @@ class ApiService {
     this.client.interceptors.request.use(
       async (config) => {
         try {
-          if (supabase) {
-            const { data: { session } } = await supabase.auth.getSession();
-            
-            if (session?.access_token) {
-              config.headers.Authorization = `Bearer ${session.access_token}`;
-            }
+          const token = localStorage.getItem('authToken');
+          if (token) {
+            config.headers.Authorization = `Bearer ${token}`;
           }
         } catch (error) {
-          console.error('Failed to get session:', error);
+          console.error('Failed to get auth token:', error);
         }
 
         console.log(`API Request: ${config.method?.toUpperCase()} ${config.url}`);
@@ -72,16 +68,9 @@ class ApiService {
         
         if (error.response?.status === 401) {
           // Handle unauthorized access
-          try {
-            if (supabase) {
-              await supabase.auth.signOut();
-            }
-            localStorage.removeItem('currentUser');
-            localStorage.removeItem('authToken');
-            window.location.href = '/';
-          } catch (signOutError) {
-            console.error('Error during sign out:', signOutError);
-          }
+          localStorage.removeItem('currentUser');
+          localStorage.removeItem('authToken');
+          window.location.href = '/';
         }
         
         return Promise.reject(error);

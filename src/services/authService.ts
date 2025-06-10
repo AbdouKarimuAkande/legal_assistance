@@ -1,10 +1,12 @@
 
-import { supabase } from '../lib/supabase';
+import { pool } from '../lib/mysql';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { authenticator } from 'otplib';
 import sgMail from '@sendgrid/mail';
 import QRCode from 'qrcode';
+import { v4 as uuidv4 } from 'uuid';
+import { RowDataPacket, ResultSetHeader } from 'mysql2';
 
 // Initialize SendGrid
 sgMail.setApiKey(import.meta.env.VITE_SENDGRID_API_KEY || '');
@@ -29,13 +31,12 @@ export class AuthService {
   ): Promise<AuthResponse> {
     try {
       // Check if user already exists
-      const { data: existingUser } = await supabase
-        .from('users')
-        .select('id')
-        .eq('email', email)
-        .single();
+      const [existingUsers] = await pool.execute<RowDataPacket[]>(
+        'SELECT id FROM users WHERE email = ?',
+        [email]
+      );
 
-      if (existingUser) {
+      if (existingUsers.length > 0) {
         throw new Error('User already exists');
       }
 
@@ -53,20 +54,19 @@ export class AuthService {
       }
 
       // Create user
-      const { data: user, error } = await supabase
-        .from('users')
-        .insert({
-          name,
-          email,
-          password_hash: passwordHash,
-          two_factor_enabled: twoFactorEnabled,
-          two_factor_method: twoFactorEnabled ? twoFactorMethod : null,
-          two_factor_secret: twoFactorSecret,
-        })
-        .select()
-        .single();
+      const userId = uuidv4();
+      await pool.execute<ResultSetHeader>(
+        `INSERT INTO users (id, name, email, password_hash, two_factor_enabled, two_factor_method, two_factor_secret)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [userId, name, email, passwordHash, twoFactorEnabled, twoFactorEnabled ? twoFactorMethod : null, twoFactorSecret]
+      );
 
-      if (error) throw error;
+      const [users] = await pool.execute<RowDataPacket[]>(
+        'SELECT * FROM users WHERE id = ?',
+        [userId]
+      );
+
+      const user = users[0];
 
       // Send email verification
       await this.sendEmailVerification(user.id, email);
@@ -91,15 +91,16 @@ export class AuthService {
   async login(email: string, password: string): Promise<AuthResponse> {
     try {
       // Get user
-      const { data: user, error } = await supabase
-        .from('users')
-        .select('*')
-        .eq('email', email)
-        .single();
+      const [users] = await pool.execute<RowDataPacket[]>(
+        'SELECT * FROM users WHERE email = ?',
+        [email]
+      );
 
-      if (error || !user) {
+      if (users.length === 0) {
         throw new Error('Invalid credentials');
       }
+
+      const user = users[0];
 
       // Verify password
       const isValidPassword = await bcrypt.compare(password, user.password_hash);
@@ -127,10 +128,10 @@ export class AuthService {
       );
 
       // Update last active
-      await supabase
-        .from('users')
-        .update({ last_active: new Date().toISOString() })
-        .eq('id', user.id);
+      await pool.execute<ResultSetHeader>(
+        'UPDATE users SET last_active = CURRENT_TIMESTAMP WHERE id = ?',
+        [user.id]
+      );
 
       return {
         user: {
@@ -152,37 +153,33 @@ export class AuthService {
   async verifyTwoFactor(email: string, code: string): Promise<AuthResponse> {
     try {
       // Get user
-      const { data: user } = await supabase
-        .from('users')
-        .select('*')
-        .eq('email', email)
-        .single();
+      const [users] = await pool.execute<RowDataPacket[]>(
+        'SELECT * FROM users WHERE email = ?',
+        [email]
+      );
 
-      if (!user) {
+      if (users.length === 0) {
         throw new Error('User not found');
       }
 
+      const user = users[0];
       let isValidCode = false;
 
       if (user.two_factor_method === '2fa_email') {
         // Verify email code
-        const { data: verificationCode } = await supabase
-          .from('verification_codes')
-          .select('*')
-          .eq('user_id', user.id)
-          .eq('type', '2fa_email')
-          .eq('code', code)
-          .eq('used', false)
-          .gt('expires_at', new Date().toISOString())
-          .single();
+        const [codes] = await pool.execute<RowDataPacket[]>(
+          `SELECT * FROM verification_codes 
+           WHERE user_id = ? AND type = '2fa_email' AND code = ? AND used = FALSE AND expires_at > NOW()`,
+          [user.id, code]
+        );
 
-        if (verificationCode) {
+        if (codes.length > 0) {
           isValidCode = true;
           // Mark code as used
-          await supabase
-            .from('verification_codes')
-            .update({ used: true })
-            .eq('id', verificationCode.id);
+          await pool.execute<ResultSetHeader>(
+            'UPDATE verification_codes SET used = TRUE WHERE id = ?',
+            [codes[0].id]
+          );
         }
       } else if (user.two_factor_method === '2fa_totp') {
         // Verify TOTP code
@@ -204,10 +201,10 @@ export class AuthService {
       );
 
       // Update last active
-      await supabase
-        .from('users')
-        .update({ last_active: new Date().toISOString() })
-        .eq('id', user.id);
+      await pool.execute<ResultSetHeader>(
+        'UPDATE users SET last_active = CURRENT_TIMESTAMP WHERE id = ?',
+        [user.id]
+      );
 
       return {
         user: {
@@ -231,14 +228,11 @@ export class AuthService {
     const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
 
     // Store verification code
-    await supabase
-      .from('verification_codes')
-      .insert({
-        user_id: userId,
-        code,
-        type: 'email_verification',
-        expires_at: expiresAt.toISOString(),
-      });
+    await pool.execute<ResultSetHeader>(
+      `INSERT INTO verification_codes (id, user_id, code, type, expires_at)
+       VALUES (?, ?, ?, 'email_verification', ?)`,
+      [uuidv4(), userId, code, expiresAt]
+    );
 
     // Send email
     const msg = {
@@ -261,14 +255,11 @@ export class AuthService {
     const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
 
     // Store verification code
-    await supabase
-      .from('verification_codes')
-      .insert({
-        user_id: userId,
-        code,
-        type: '2fa_email',
-        expires_at: expiresAt.toISOString(),
-      });
+    await pool.execute<ResultSetHeader>(
+      `INSERT INTO verification_codes (id, user_id, code, type, expires_at)
+       VALUES (?, ?, ?, '2fa_email', ?)`,
+      [uuidv4(), userId, code, expiresAt]
+    );
 
     // Send email
     const msg = {

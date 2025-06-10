@@ -48,7 +48,7 @@ function AppContent() {
         const isConnected = await DatabaseService.testConnection();
         
         if (!isConnected) {
-          setError('Failed to connect to database. Please check your Supabase configuration.');
+          setError('Failed to connect to database. Please check your MySQL configuration.');
           return;
         }
 

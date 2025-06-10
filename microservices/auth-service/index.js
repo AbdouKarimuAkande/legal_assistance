@@ -5,11 +5,12 @@ import helmet from 'helmet';
 import morgan from 'morgan';
 import compression from 'compression';
 import rateLimit from 'express-rate-limit';
-import { createClient } from '@supabase/supabase-js';
+import mysql from 'mysql2/promise';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { authenticator } from 'otplib';
 import sgMail from '@sendgrid/mail';
+import { v4 as uuidv4 } from 'uuid';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -29,11 +30,17 @@ const limiter = rateLimit({
 });
 app.use(limiter);
 
-// Supabase client
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+// MySQL connection
+const pool = mysql.createPool({
+  host: process.env.DB_HOST || 'localhost',
+  user: process.env.DB_USER || 'root',
+  password: process.env.DB_PASSWORD || 'password',
+  database: process.env.DB_NAME || 'lawhelp_db',
+  port: parseInt(process.env.DB_PORT || '3306'),
+  waitForConnections: true,
+  connectionLimit: 10,
+  queueLimit: 0
+});
 
 // SendGrid
 sgMail.setApiKey(process.env.SENDGRID_API_KEY);
@@ -52,13 +59,12 @@ app.post('/api/auth/register', async (req, res) => {
     }
 
     // Check if user exists
-    const { data: existingUser } = await supabase
-      .from('users')
-      .select('id')
-      .eq('email', email)
-      .single();
+    const [existingUsers] = await pool.execute(
+      'SELECT id FROM users WHERE email = ?',
+      [email]
+    );
 
-    if (existingUser) {
+    if (existingUsers.length > 0) {
       return res.status(409).json({ error: 'User already exists' });
     }
 
@@ -72,34 +78,36 @@ app.post('/api/auth/register', async (req, res) => {
     }
 
     // Create user
-    const { data: user, error } = await supabase
-      .from('users')
-      .insert({
-        name,
-        email,
-        password_hash: passwordHash,
-        two_factor_enabled: twoFactorEnabled || false,
-        two_factor_method: twoFactorEnabled ? twoFactorMethod : null,
-        two_factor_secret: twoFactorSecret,
-      })
-      .select()
-      .single();
+    const userId = uuidv4();
+    await pool.execute(
+      `INSERT INTO users (id, name, email, password_hash, two_factor_enabled, two_factor_method, two_factor_secret)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [userId, name, email, passwordHash, twoFactorEnabled || false, twoFactorEnabled ? twoFactorMethod : null, twoFactorSecret]
+    );
 
-    if (error) throw error;
+    const [users] = await pool.execute(
+      'SELECT * FROM users WHERE id = ?',
+      [userId]
+    );
+
+    const user = users[0];
 
     res.status(201).json({
-      user: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        isLawyer: user.is_lawyer,
-        twoFactorEnabled: user.two_factor_enabled,
-      },
-      message: 'User created successfully',
+      success: true,
+      data: {
+        user: {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          isLawyer: user.is_lawyer,
+          twoFactorEnabled: user.two_factor_enabled,
+          emailVerified: user.email_verified,
+        }
+      }
     });
   } catch (error) {
     console.error('Registration error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ error: 'Registration failed' });
   }
 });
 
@@ -108,48 +116,66 @@ app.post('/api/auth/login', async (req, res) => {
     const { email, password } = req.body;
 
     if (!email || !password) {
-      return res.status(400).json({ error: 'Missing credentials' });
+      return res.status(400).json({ error: 'Missing email or password' });
     }
 
     // Get user
-    const { data: user } = await supabase
-      .from('users')
-      .select('*')
-      .eq('email', email)
-      .single();
+    const [users] = await pool.execute(
+      'SELECT * FROM users WHERE email = ?',
+      [email]
+    );
 
-    if (!user || !await bcrypt.compare(password, user.password_hash)) {
+    if (users.length === 0) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    // Check 2FA
+    const user = users[0];
+
+    // Verify password
+    const isValidPassword = await bcrypt.compare(password, user.password_hash);
+    if (!isValidPassword) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    // Check if 2FA is enabled
     if (user.two_factor_enabled) {
       return res.json({
+        success: true,
         requireTwoFactor: true,
         twoFactorMethod: user.two_factor_method,
       });
     }
 
-    // Generate token
+    // Generate JWT token
     const token = jwt.sign(
       { userId: user.id, email: user.email },
       JWT_SECRET,
       { expiresIn: '7d' }
     );
 
+    // Update last active
+    await pool.execute(
+      'UPDATE users SET last_active = CURRENT_TIMESTAMP WHERE id = ?',
+      [user.id]
+    );
+
     res.json({
-      user: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        isLawyer: user.is_lawyer,
-        twoFactorEnabled: user.two_factor_enabled,
-      },
-      token,
+      success: true,
+      data: {
+        user: {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          isLawyer: user.is_lawyer,
+          twoFactorEnabled: user.two_factor_enabled,
+          emailVerified: user.email_verified,
+        },
+        token,
+      }
     });
   } catch (error) {
     console.error('Login error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ error: 'Login failed' });
   }
 });
 
@@ -162,38 +188,36 @@ app.post('/api/auth/verify-2fa', async (req, res) => {
     }
 
     // Get user
-    const { data: user } = await supabase
-      .from('users')
-      .select('*')
-      .eq('email', email)
-      .single();
+    const [users] = await pool.execute(
+      'SELECT * FROM users WHERE email = ?',
+      [email]
+    );
 
-    if (!user) {
+    if (users.length === 0) {
       return res.status(404).json({ error: 'User not found' });
     }
 
+    const user = users[0];
     let isValidCode = false;
 
     if (user.two_factor_method === '2fa_email') {
       // Verify email code
-      const { data: verificationCode } = await supabase
-        .from('verification_codes')
-        .select('*')
-        .eq('user_id', user.id)
-        .eq('type', '2fa_email')
-        .eq('code', code)
-        .eq('used', false)
-        .gt('expires_at', new Date().toISOString())
-        .single();
+      const [codes] = await pool.execute(
+        `SELECT * FROM verification_codes 
+         WHERE user_id = ? AND type = '2fa_email' AND code = ? AND used = FALSE AND expires_at > NOW()`,
+        [user.id, code]
+      );
 
-      if (verificationCode) {
+      if (codes.length > 0) {
         isValidCode = true;
-        await supabase
-          .from('verification_codes')
-          .update({ used: true })
-          .eq('id', verificationCode.id);
+        // Mark code as used
+        await pool.execute(
+          'UPDATE verification_codes SET used = TRUE WHERE id = ?',
+          [codes[0].id]
+        );
       }
     } else if (user.two_factor_method === '2fa_totp') {
+      // Verify TOTP code
       isValidCode = authenticator.verify({
         token: code,
         secret: user.two_factor_secret,
@@ -204,30 +228,39 @@ app.post('/api/auth/verify-2fa', async (req, res) => {
       return res.status(401).json({ error: 'Invalid verification code' });
     }
 
-    // Generate token
+    // Generate JWT token
     const token = jwt.sign(
       { userId: user.id, email: user.email },
       JWT_SECRET,
       { expiresIn: '7d' }
     );
 
+    // Update last active
+    await pool.execute(
+      'UPDATE users SET last_active = CURRENT_TIMESTAMP WHERE id = ?',
+      [user.id]
+    );
+
     res.json({
-      user: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        isLawyer: user.is_lawyer,
-        twoFactorEnabled: user.two_factor_enabled,
-      },
-      token,
+      success: true,
+      data: {
+        user: {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          isLawyer: user.is_lawyer,
+          twoFactorEnabled: user.two_factor_enabled,
+          emailVerified: user.email_verified,
+        },
+        token,
+      }
     });
   } catch (error) {
     console.error('2FA verification error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ error: '2FA verification failed' });
   }
 });
 
-// Health check
 app.get('/health', (req, res) => {
   res.json({ status: 'healthy', service: 'auth-service' });
 });
