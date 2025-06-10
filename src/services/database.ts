@@ -1,29 +1,22 @@
 
-import { pool, generateCharId } from '../lib/mysql';
-import { RowDataPacket, ResultSetHeader } from 'mysql2';
+import { pool } from '../lib/mysql';
 
 export class DatabaseService {
-  // Test database connection
   static async testConnection(): Promise<boolean> {
     try {
-      const connection = await pool.getConnection();
-      await connection.ping();
-      connection.release();
+      const [rows] = await pool.execute('SELECT 1 as test');
       console.log('Database connection successful');
       return true;
     } catch (error) {
-      console.error('Database connection test failed:', error);
+      console.error('Database connection failed:', error);
       return false;
     }
   }
 
-  // Initialize database tables if they don't exist
   static async initializeTables(): Promise<void> {
     try {
-      const connection = await pool.getConnection();
-      
       // Create users table
-      await connection.execute(`
+      await pool.execute(`
         CREATE TABLE IF NOT EXISTS users (
           id CHAR(16) PRIMARY KEY,
           email VARCHAR(255) UNIQUE NOT NULL,
@@ -31,9 +24,9 @@ export class DatabaseService {
           password_hash VARCHAR(255) NOT NULL,
           is_lawyer BOOLEAN DEFAULT FALSE,
           two_factor_enabled BOOLEAN DEFAULT FALSE,
-          two_factor_method ENUM('2fa_email', '2fa_totp') NULL,
-          two_factor_secret VARCHAR(255) NULL,
-          phone VARCHAR(20) NULL,
+          two_factor_method ENUM('2fa_email', '2fa_totp') DEFAULT NULL,
+          two_factor_secret VARCHAR(255) DEFAULT NULL,
+          phone VARCHAR(20) DEFAULT NULL,
           email_verified BOOLEAN DEFAULT FALSE,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -42,7 +35,7 @@ export class DatabaseService {
       `);
 
       // Create chat_sessions table
-      await connection.execute(`
+      await pool.execute(`
         CREATE TABLE IF NOT EXISTS chat_sessions (
           id CHAR(16) PRIMARY KEY,
           user_id CHAR(16) NOT NULL,
@@ -54,7 +47,7 @@ export class DatabaseService {
       `);
 
       // Create chat_messages table
-      await connection.execute(`
+      await pool.execute(`
         CREATE TABLE IF NOT EXISTS chat_messages (
           id CHAR(16) PRIMARY KEY,
           session_id CHAR(16) NOT NULL,
@@ -68,7 +61,7 @@ export class DatabaseService {
       `);
 
       // Create verification_codes table
-      await connection.execute(`
+      await pool.execute(`
         CREATE TABLE IF NOT EXISTS verification_codes (
           id CHAR(16) PRIMARY KEY,
           user_id CHAR(16) NOT NULL,
@@ -81,58 +74,53 @@ export class DatabaseService {
         )
       `);
 
-      connection.release();
       console.log('Database tables initialized successfully');
     } catch (error) {
-      console.error('Error initializing tables:', error);
+      console.error('Error initializing database tables:', error);
       throw error;
     }
   }
 
-  // Get user by email
-  static async getUserByEmail(email: string) {
+  static async getUserById(userId: string) {
     try {
-      const [rows] = await pool.execute<RowDataPacket[]>(
-        'SELECT * FROM users WHERE email = ?',
-        [email]
+      const [users] = await pool.execute(
+        'SELECT * FROM users WHERE id = ?',
+        [userId]
       );
-      return rows[0] || null;
+      
+      return (users as any[]).length > 0 ? (users as any[])[0] : null;
     } catch (error) {
       console.error('Error fetching user:', error);
       throw error;
     }
   }
 
-  // Create or update user
-  static async upsertUser(userData: any) {
+  static async getUserByEmail(email: string) {
     try {
-      const { email, name, password_hash, is_lawyer, two_factor_enabled, two_factor_method, two_factor_secret, phone, email_verified } = userData;
-      
-      // Generate CHAR ID if not provided
-      const userId = userData.id || generateCharId(16);
-      
-      const [result] = await pool.execute<ResultSetHeader>(
-        `INSERT INTO users (id, email, name, password_hash, is_lawyer, two_factor_enabled, two_factor_method, two_factor_secret, phone, email_verified)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-         ON DUPLICATE KEY UPDATE
-         name = VALUES(name),
-         password_hash = VALUES(password_hash),
-         is_lawyer = VALUES(is_lawyer),
-         two_factor_enabled = VALUES(two_factor_enabled),
-         two_factor_method = VALUES(two_factor_method),
-         two_factor_secret = VALUES(two_factor_secret),
-         phone = VALUES(phone),
-         email_verified = VALUES(email_verified),
-         updated_at = CURRENT_TIMESTAMP`,
-        [userId, email, name, password_hash, is_lawyer || false, two_factor_enabled || false, two_factor_method, two_factor_secret, phone, email_verified || false]
+      const [users] = await pool.execute(
+        'SELECT * FROM users WHERE email = ?',
+        [email]
       );
-
-      return await this.getUserByEmail(email);
+      
+      return (users as any[]).length > 0 ? (users as any[])[0] : null;
     } catch (error) {
-      console.error('Error upserting user:', error);
+      console.error('Error fetching user by email:', error);
+      throw error;
+    }
+  }
+
+  static async updateUser(userId: string, updates: any) {
+    try {
+      const setClause = Object.keys(updates).map(key => `${key} = ?`).join(', ');
+      const values = Object.values(updates);
+      
+      await pool.execute(
+        `UPDATE users SET ${setClause} WHERE id = ?`,
+        [...values, userId]
+      );
+    } catch (error) {
+      console.error('Error updating user:', error);
       throw error;
     }
   }
 }
-
-export default DatabaseService;

@@ -1,20 +1,15 @@
-
-import React, { useEffect, useState } from 'react';
-import MainApp from './components/layout/MainApp';
+import React, { useState, useEffect } from 'react';
 import { AuthProvider } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
-import { ErrorBoundary } from './components/ErrorBoundary';
+import MainApp from './components/layout/MainApp';
+import ErrorBoundary from './components/ErrorBoundary';
 
 function App() {
-  console.log('App component mounted successfully');
-  
   return (
     <ErrorBoundary>
       <ThemeProvider>
         <AuthProvider>
-          <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-200">
-            <AppContent />
-          </div>
+          <AppContent />
         </AuthProvider>
       </ThemeProvider>
     </ErrorBoundary>
@@ -31,30 +26,32 @@ function AppContent() {
       try {
         // Check if required environment variables are set
         const requiredEnvVars = [
-          'VITE_SUPABASE_URL',
-          'VITE_SUPABASE_ANON_KEY'
+          'DB_HOST',
+          'DB_USER',
+          'DB_PASSWORD',
+          'DB_NAME'
         ];
-        
-        const missingVars = requiredEnvVars.filter(varName => !import.meta.env[varName]);
-        
+
+        const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
+
         if (missingVars.length > 0) {
-          setError(`Missing environment variables: ${missingVars.join(', ')}`);
-          return;
+          console.warn(`Missing environment variables: ${missingVars.join(', ')}`);
+          // Continue with defaults for development
         }
 
         // Test database connection
         console.log('Testing database connection...');
         const { DatabaseService } = await import('./services/database');
         const isConnected = await DatabaseService.testConnection();
-        
+
         if (!isConnected) {
           setError('Failed to connect to database. Please check your MySQL configuration.');
           return;
         }
 
-        // Initialize tables check
+        // Initialize tables
         await DatabaseService.initializeTables();
-        
+
         console.log('App initialized successfully');
         setIsLoading(false);
       } catch (err) {
@@ -63,61 +60,40 @@ function AppContent() {
       }
     };
 
-    const timer = setTimeout(initializeApp, 500);
-    return () => clearTimeout(timer);
+    initializeApp();
   }, []);
-
-  if (error) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <div className="text-red-500 text-xl mb-4">Application Error</div>
-          <div className="text-gray-600 dark:text-gray-400">{error}</div>
-          <button 
-            onClick={() => window.location.reload()} 
-            className="mt-4 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary-dark"
-          >
-            Reload App
-          </button>
-        </div>
-      </div>
-    );
-  }
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-pulse flex space-x-2 justify-center mb-4">
-            <div className="h-3 w-3 bg-primary rounded-full"></div>
-            <div className="h-3 w-3 bg-primary rounded-full"></div>
-            <div className="h-3 w-3 bg-primary rounded-full"></div>
-          </div>
-          <div className="text-gray-600 dark:text-gray-400">Loading LawHelp...</div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Initializing application...</p>
         </div>
       </div>
     );
   }
 
-  try {
-    return <MainApp />;
-  } catch (error) {
-    console.error('Error rendering MainApp:', error);
+  if (error) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <div className="text-red-500 text-xl mb-4">Component Error</div>
-          <div className="text-gray-600 dark:text-gray-400">Failed to render main application</div>
-          <button 
-            onClick={() => window.location.reload()} 
-            className="mt-4 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary-dark"
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center max-w-md mx-auto p-6">
+          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+            <h2 className="font-bold mb-2">Initialization Error</h2>
+            <p>{error}</p>
+          </div>
+          <button
+            onClick={() => window.location.reload()}
+            className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
           >
-            Reload App
+            Retry
           </button>
         </div>
       </div>
     );
   }
+
+  return <MainApp />);
 }
 
 export default App;
