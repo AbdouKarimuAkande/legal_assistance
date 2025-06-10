@@ -1,0 +1,104 @@
+  ➜  Network: http://10.253.128.72:5000/
+  ➜  press h + enter to show help
+09:04:28 [vite] (client) Pre-transform error: C:\Users\Abdou Karim\Desktop\legalassistance\src\App.tsx: Missing semicolon. (96:20)
+
+  94 |   }
+  95 |
+> 96 |   return <MainApp />);
+     |                     ^
+  97 | }
+  98 |
+  99 | export default App;
+  Plugin: vite:react-babel
+  File: C:/Users/Abdou Karim/Desktop/legalassistance/src/App.tsx:96:20
+  94 |    }
+  95 |
+  96 |    return <MainApp />);
+     |                      ^
+  97 |  }
+  98 |
+09:04:28 [vite] (client) Pre-transform error: Failed to load PostCSS config (searchPath: C:/Users/Abdou Karim/Desktop/legalassistance): [ReferenceError] module is not defined in ES module scope
+This file is being treated as an ES module because it has a '.js' file extension and 'C:\Users\Abdou Karim\Desktop\legalassistance\package.json' contains "type": "module". To treat it as a CommonJS script, rename it to use the '.cjs' file extension.
+ReferenceError: module is not defined in ES module scope
+This file is being treated as an ES module because it has a '.js' file extension and 'C:\Users\Abdou Karim\Desktop\legalassistance\package.json' contains "type": "module". To treat it as a CommonJS script, rename it to use the '.cjs' file extension.
+    at file:///C:/Users/Abdou%20Karim/Desktop/legalassistance/postcss.config.js?t=1749538998140:2:1
+    at ModuleJob.run (node:internal/modules/esm/module_job:271:25)
+    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:578:26)
+    at async req$3 (file:///C:/Users/Abdou%20Karim/Desktop/legalassistance/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:11658:13)
+    at async Object.search (file:///C:/Users/Abdou%20Karim/Desktop/legalassistance/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:11400:23)
+  Plugin: vite:css
+  File: C:/Users/Abdou Karim/Desktop/legalassistance/src/index.css
+09:04:29 [vite] Internal server error: C:\Users\Abdou Karim\Desktop\legalassistance\src\App.tsx: Missing semicolon. (96:20)
+
+  94 |   }
+  95 |
+> 96 |   return <MainApp />);
+     |                     ^
+  97 | }
+  98 |
+  99 | export default App;
+  Plugin: vite:react-babel
+  File: C:/Users/Abdou Karim/Desktop/legalassistance/src/App.tsx:96:20
+  94 |    }
+  95 |
+  96 |    return <MainApp />);
+     |                      ^
+  97 |  }
+  98 |
+      at constructor (C:\Users\Abdou Karim\Desktop\legalassistance\node_modules\@babel\parser\lib\index.js:363:19)
+      at TypeScriptParserMixin.raise (C:\Users\Abdou Karim\Desktop\legalassistance\node_modules\@babel\parser\lib\index.js:6609:19)
+      at TypeScriptParserMixin.semicolon (C:\Users\Abdou Karim\Desktop\legalassistance\node_modules\@babel\parser\lib\index.js:6906:10)
+      at TypeScriptParserMixin.parseReturnStatement (C:\Users\Abdou Karim\Desktop\legalassistance\node_modules\@babel\parser\lib\index.js:13062:12)
+      at TypeScriptParserMixin.parseStatementContent (C:\Users\Abdou Karim\Desktop\legalassistance\node_modules\@babel\parser\lib\index.js:12716:21)
+      at TypeScriptParserMixin.parseStatementContent (C:\Users\Abdou Karim\Desktop\legalassistance\node_modules\@babel\parser\lib\index.js:9469:18)
+      at TypeScriptParserMixin.parseStatementLike (C:\Users\Abdou Karim\Desktop\legalassistance\node_modules\@babel\parser\lib\index.js:12685:17)
+      at TypeScriptParserMixin.parseStatementListItem (C:\Users\Abdou Karim\Desktop\legalassistance\node_modules\@babel\parser\lib\index.js:12665:17)
+      at TypeScriptParserMixin.parseBlockOrModuleBlockBody (C:\Users\Abdou Karim\Desktop\legalassistance\node_modules\@babel\parser\lib\index.js:13235:61)
+      at TypeScriptParserMixin.parseBlockBody (C:\Users\Abdou Karim\Desktop\legalassistance\node_modules\@babel\parser\lib\index.js:13228:10)
+      at TypeScriptParserMixin.parseBlock (C:\Users\Abdou Karim\Desktop\legalassistance\node_modules\@babel\parser\lib\index.js:13216:10)
+      at TypeScriptParserMixin.parseFunctionBody (C:\Users\Abdou Karim\Desktop\legalassistance\node_modules\@babel\parser\lib\index.js:12035:24)
+      at TypeScriptParserMixin.parseFunctionBodyAndFinish (C:\Users\Abdou Karim\Desktop\legalassistance\node_modules\@babel\parser\lib\index.js:12021:10)
+      at TypeScriptParserMixin.parseFunctionBodyAndFinish (C:\Users\Abdou Karim\Desktop\legalassistance\node_modules\@babel\parser\lib\index.js:9194:18)
+      at C:\Users\Abdou Karim\Desktop\legalassistance\node_modules\@babel\parser\lib\index.js:13360:12
+      at TypeScriptParserMixin.withSmartMixTopicForbiddingContext (C:\Users\Abdou Karim\Desktop\legalassistance\node_modules\@babel\parser\lib\index.js:12338:14)
+      at TypeScriptParserMixin.parseFunction (C:\Users\Abdou Karim\Desktop\legalassistance\node_modules\@babel\parser\lib\index.js:13359:10)
+      at TypeScriptParserMixin.parseFunctionStatement (C:\Users\Abdou Karim\Desktop\legalassistance\node_modules\@babel\parser\lib\index.js:13044:17)
+      at TypeScriptParserMixin.parseStatementContent (C:\Users\Abdou Karim\Desktop\legalassistance\node_modules\@babel\parser\lib\index.js:12709:21)
+      at TypeScriptParserMixin.parseStatementContent (C:\Users\Abdou Karim\Desktop\legalassistance\node_modules\@babel\parser\lib\index.js:9469:18)
+      at TypeScriptParserMixin.parseStatementLike (C:\Users\Abdou Karim\Desktop\legalassistance\node_modules\@babel\parser\lib\index.js:12685:17)
+      at TypeScriptParserMixin.parseModuleItem (C:\Users\Abdou Karim\Desktop\legalassistance\node_modules\@babel\parser\lib\index.js:12662:17)
+      at TypeScriptParserMixin.parseBlockOrModuleBlockBody (C:\Users\Abdou Karim\Desktop\legalassistance\node_modules\@babel\parser\lib\index.js:13235:36)
+      at TypeScriptParserMixin.parseBlockBody (C:\Users\Abdou Karim\Desktop\legalassistance\node_modules\@babel\parser\lib\index.js:13228:10)
+      at TypeScriptParserMixin.parseProgram (C:\Users\Abdou Karim\Desktop\legalassistance\node_modules\@babel\parser\lib\index.js:12541:10)
+      at TypeScriptParserMixin.parseTopLevel (C:\Users\Abdou Karim\Desktop\legalassistance\node_modules\@babel\parser\lib\index.js:12531:25)
+      at TypeScriptParserMixin.parse (C:\Users\Abdou Karim\Desktop\legalassistance\node_modules\@babel\parser\lib\index.js:14410:10)
+      at TypeScriptParserMixin.parse (C:\Users\Abdou Karim\Desktop\legalassistance\node_modules\@babel\parser\lib\index.js:10086:18)
+      at parse (C:\Users\Abdou Karim\Desktop\legalassistance\node_modules\@babel\parser\lib\index.js:14444:38)
+      at parser (C:\Users\Abdou Karim\Desktop\legalassistance\node_modules\@babel\core\lib\parser\index.js:41:34)
+      at parser.next (<anonymous>)
+      at normalizeFile (C:\Users\Abdou Karim\Desktop\legalassistance\node_modules\@babel\core\lib\transformation\normalize-file.js:64:37)
+      at normalizeFile.next (<anonymous>)
+      at run (C:\Users\Abdou Karim\Desktop\legalassistance\node_modules\@babel\core\lib\transformation\index.js:22:50)
+      at run.next (<anonymous>)
+      at transform (C:\Users\Abdou Karim\Desktop\legalassistance\node_modules\@babel\core\lib\transform.js:22:33)
+      at transform.next (<anonymous>)
+      at step (C:\Users\Abdou Karim\Desktop\legalassistance\node_modules\gensync\index.js:261:32)
+      at C:\Users\Abdou Karim\Desktop\legalassistance\node_modules\gensync\index.js:273:13
+      at async.call.result.err.err (C:\Users\Abdou Karim\Desktop\legalassistance\node_modules\gensync\index.js:223:11)
+      at C:\Users\Abdou Karim\Desktop\legalassistance\node_modules\gensync\index.js:189:28
+      at C:\Users\Abdou Karim\Desktop\legalassistance\node_modules\@babel\core\lib\gensync-utils\async.js:67:7
+      at C:\Users\Abdou Karim\Desktop\legalassistance\node_modules\gensync\index.js:113:33
+      at step (C:\Users\Abdou Karim\Desktop\legalassistance\node_modules\gensync\index.js:287:14)
+      at C:\Users\Abdou Karim\Desktop\legalassistance\node_modules\gensync\index.js:273:13
+      at async.call.result.err.err (C:\Users\Abdou Karim\Desktop\legalassistance\node_modules\gensync\index.js:223:11)
+09:04:29 [vite] Internal server error: Failed to load PostCSS config (searchPath: C:/Users/Abdou Karim/Desktop/legalassistance): [ReferenceError] module is not defined in ES module scope
+This file is being treated as an ES module because it has a '.js' file extension and 'C:\Users\Abdou Karim\Desktop\legalassistance\package.json' contains "type": "module". To treat it as a CommonJS script, rename it to use the '.cjs' file extension.
+ReferenceError: module is not defined in ES module scope
+This file is being treated as an ES module because it has a '.js' file extension and 'C:\Users\Abdou Karim\Desktop\legalassistance\package.json' contains "type": "module". To treat it as a CommonJS script, rename it to use the '.cjs' file extension.
+    at file:///C:/Users/Abdou%20Karim/Desktop/legalassistance/postcss.config.js?t=1749538998140:2:1
+    at ModuleJob.run (node:internal/modules/esm/module_job:271:25)
+    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:578:26)
+    at async req$3 (file:///C:/Users/Abdou%20Karim/Desktop/legalassistance/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:11658:13)
+    at async Object.search (file:///C:/Users/Abdou%20Karim/Desktop/legalassistance/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:11400:23)
+  Plugin: vite:css
+  File: C:/Users/Abdou Karim/Desktop/legalassistance/src/index.css
